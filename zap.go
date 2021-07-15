@@ -3,12 +3,97 @@ package logs
 import (
 	"fmt"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"strings"
 )
 
-var zapLog *zap.SugaredLogger
+const (
+	LogConsoleFormatter = LogFormatter("console")
+	LogJsonFormatter    = LogFormatter("json")
 
-func Log() Logs {
-	return zapLog
+	LogDebugLevel = LogLevel("debug")
+	LogInfoLevel  = LogLevel("info")
+	LogWarnLevel  = LogLevel("warn")
+	LogErrorLevel = LogLevel("error")
+
+	defaultLogName = "AACFACTORY"
+)
+
+type LogLevel string
+
+type LogFormatter string
+
+type LogOption struct {
+	Name             string       `json:"name,omitempty"`
+	Formatter        LogFormatter `json:"formatter,omitempty"`
+	ActiveLevel      LogLevel     `json:"activeLevel,omitempty"`
+	Colorable        bool         `json:"colorable,omitempty"`
+	EnableStacktrace bool         `json:"enableStacktrace,omitempty"`
+}
+
+func New(option LogOption) Logs {
+
+	name := strings.TrimSpace(option.Name)
+	if name == "" {
+		name = defaultLogName
+	}
+
+	formatter := option.Formatter
+	if formatter == "" {
+		formatter = LogConsoleFormatter
+	}
+	activeLevel := option.ActiveLevel
+	if activeLevel == "" {
+		activeLevel = LogInfoLevel
+	}
+
+	zapLevel := zapLogLevel(activeLevel)
+	var callerEncoder zapcore.CallerEncoder
+	if formatter == LogJsonFormatter {
+		callerEncoder = zapcore.ShortCallerEncoder
+		option.Colorable = false
+	} else {
+		callerEncoder = zapLogFullCallerEncoder
+	}
+
+	var encodeLevel zapcore.LevelEncoder
+	if !option.Colorable {
+		encodeLevel = zapcore.CapitalLevelEncoder
+	} else {
+		encodeLevel = zapLogCapitalColorLevelEncoder
+	}
+
+	encodingConfig := zapcore.EncoderConfig{
+		TimeKey:        "_T",
+		LevelKey:       "_L",
+		NameKey:        "_N",
+		CallerKey:      "_C",
+		MessageKey:     "_M",
+		StacktraceKey:  "_S",
+		LineEnding:     zapcore.DefaultLineEnding,
+		EncodeLevel:    encodeLevel,
+		EncodeTime:     zapcore.RFC3339NanoTimeEncoder,
+		EncodeDuration: zapcore.StringDurationEncoder,
+		EncodeCaller:   callerEncoder,
+	}
+
+	config := zap.Config{
+		Level:             zap.NewAtomicLevelAt(zapLevel),
+		Development:       false,
+		Encoding:          string(formatter),
+		EncoderConfig:     encodingConfig,
+		DisableStacktrace: !option.EnableStacktrace,
+		OutputPaths:       []string{"stdout"},
+		ErrorOutputPaths:  []string{"stdout"},
+		InitialFields:     map[string]interface{}{"app": name},
+	}
+
+	log, createEr := config.Build()
+	if createEr != nil {
+		panic(fmt.Errorf("logs create failed, %v", createEr))
+	}
+
+	return log.Sugar()
 }
 
 func With(log Logs, fields ...Field) (_log Logs, err error) {
@@ -30,8 +115,4 @@ func With(log Logs, fields ...Field) (_log Logs, err error) {
 
 	_log = sLog.Desugar().With(kvs...).Sugar()
 	return
-}
-
-func Sync() {
-	_ = zapLog.Sync()
 }

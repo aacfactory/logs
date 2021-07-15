@@ -7,9 +7,9 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-func zapLogLevel(name string) zapcore.Level {
-	name = strings.ToLower(name)
-	switch name {
+func zapLogLevel(name LogLevel) zapcore.Level {
+	value := strings.ToLower(string(name))
+	switch value {
 	case "debug":
 		return zapcore.DebugLevel
 	case "info":
@@ -55,6 +55,6 @@ func zapLogFullCallerEncoder(caller zapcore.EntryCaller, enc zapcore.PrimitiveAr
 	if gopath == "" {
 		enc.AppendString(caller.FullPath())
 	} else {
-		enc.AppendString(caller.FullPath()[len(gopath) + 5:])
+		enc.AppendString(caller.FullPath()[len(gopath)+5:])
 	}
 }

@@ -8,29 +8,36 @@ import (
 
 func TestLog(t *testing.T) {
 
-	wLog, withErr := logs.With(logs.Log(), logs.F("foo", "bar"), logs.F("baz", "xxx"))
+	log := logs.New(logs.LogOption{
+		Name:        "FOO",
+		Formatter:   logs.LogConsoleFormatter,
+		ActiveLevel: logs.LogDebugLevel,
+		Colorable:   true,
+	})
+
+	wLog, withErr := logs.With(log, logs.F("foo", "bar"), logs.F("baz", "xxx"))
 	if withErr != nil {
 		t.Error(withErr)
 		return
 	}
 	wLog.Info("with")
 
-	logs.Log().Debug("Debug")
-	logs.Log().Debugf("Debug %s", "debug")
-	logs.Log().Debugw("Debug", "k", "v", "t", time.Now())
+	log.Debug("Debug")
+	log.Debugf("Debug %s", "debug")
+	log.Debugw("Debug", "k", "v", "t", time.Now())
 
-	logs.Log().Info("Info", "debug")
-	logs.Log().Infof("Info %s", "debug")
-	logs.Log().Infow("Info", "k", "v", "t", time.Now())
+	log.Info("Info", "debug")
+	log.Infof("Info %s", "debug")
+	log.Infow("Info", "k", "v", "t", time.Now())
 
-	logs.Log().Warn("Warn")
-	logs.Log().Warnf("Warn %s", "debug")
-	logs.Log().Warnw("Warn", "k", "v", "t", time.Now())
+	log.Warn("Warn")
+	log.Warnf("Warn %s", "debug")
+	log.Warnw("Warn", "k", "v", "t", time.Now())
 
-	logs.Log().Error("Error", "debug")
-	logs.Log().Errorf("Error %s", "debug")
-	logs.Log().Errorw("Error", "k", "v", "t", time.Now())
+	log.Error("Error", "debug")
+	log.Errorf("Error %s", "debug")
+	log.Errorw("Error", "k", "v", "t", time.Now())
 
-	logs.Sync()
+	_ = log.Sync()
 
 }
