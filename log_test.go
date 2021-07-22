@@ -1,7 +1,7 @@
 package logs_test
 
 import (
-	"errors"
+	"github.com/aacfactory/errors"
 	"github.com/aacfactory/logs"
 	"testing"
 	"time"
@@ -37,7 +37,12 @@ func TestLog(t *testing.T) {
 	log.Error("Error", "debug")
 	log.Errorf("Error %s", "debug")
 	log.Errorw("Error", "k", "v", "t", time.Now())
-	logs.With(log, logs.Error(errors.New("kv"))).Error("foo")
+	err := errors.ServiceError("service err")
+	logs.With(log, logs.Error(err)).Error("foo")
+
+	logs.CodeError(log, err).Error("fff")
+
 	_ = log.Sync()
+
 
 }

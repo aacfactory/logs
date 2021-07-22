@@ -2,6 +2,7 @@ package logs
 
 import (
 	"fmt"
+	"github.com/aacfactory/errors"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"strings"
@@ -114,9 +115,9 @@ func With(log Logs, fields ...Field) (_log Logs) {
 	kvs := make([]zap.Field, 0, 1)
 	for _, field := range fields {
 		if field.Key == "error" {
-			codeErr, isCodeErr := field.Value.(codeError)
+			codeErr, isCodeErr := field.Value.(errors.CodeError)
 			if isCodeErr {
-				kvs = append(kvs, zap.Any(field.Key, codeErr))
+				kvs = append(kvs, zap.Object(field.Key, newCodeErrorMarshalLogObject(codeErr)))
 				continue
 			}
 			kvs = append(kvs, zap.Any(field.Key, field.Value))
@@ -124,5 +125,15 @@ func With(log Logs, fields ...Field) (_log Logs) {
 	}
 
 	_log = sLog.Desugar().With(kvs...).Sugar()
+	return
+}
+
+func CodeError(log Logs, err errors.CodeError) (_log Logs) {
+	sLog, ok := log.(*zap.SugaredLogger)
+	if !ok {
+		panic(fmt.Errorf("logs with fields failed, it is not *zap.SugaredLogger"))
+		return
+	}
+	_log = sLog.Desugar().With(zap.Object("error", newCodeErrorMarshalLogObject(err))).Sugar()
 	return
 }
