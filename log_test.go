@@ -1,6 +1,7 @@
 package logs_test
 
 import (
+	"errors"
 	"github.com/aacfactory/logs"
 	"testing"
 	"time"
@@ -9,17 +10,16 @@ import (
 func TestLog(t *testing.T) {
 
 	log := logs.New(logs.LogOption{
-		Name:        "FOO",
-		Formatter:   logs.LogConsoleFormatter,
-		ActiveLevel: logs.LogDebugLevel,
-		Colorable:   true,
+		Name:             "FOO",
+		Formatter:        logs.LogConsoleFormatter,
+		ActiveLevel:      logs.LogDebugLevel,
+		Colorable:        true,
+		EnableCaller:     true,
+		EnableStacktrace: false,
 	})
 
-	wLog, withErr := logs.With(log, logs.F("foo", "bar"), logs.F("baz", "xxx"))
-	if withErr != nil {
-		t.Error(withErr)
-		return
-	}
+	wLog := logs.With(log, logs.F("foo", "bar"), logs.F("baz", "xxx"))
+
 	wLog.Info("with")
 
 	log.Debug("Debug")
@@ -37,7 +37,7 @@ func TestLog(t *testing.T) {
 	log.Error("Error", "debug")
 	log.Errorf("Error %s", "debug")
 	log.Errorw("Error", "k", "v", "t", time.Now())
-
+	logs.With(log, logs.Error(errors.New("kv"))).Error("foo")
 	_ = log.Sync()
 
 }

@@ -28,6 +28,7 @@ type LogOption struct {
 	Formatter        LogFormatter `json:"formatter,omitempty"`
 	ActiveLevel      LogLevel     `json:"activeLevel,omitempty"`
 	Colorable        bool         `json:"colorable,omitempty"`
+	EnableCaller     bool         `json:"enableCaller,omitempty"`
 	EnableStacktrace bool         `json:"enableStacktrace,omitempty"`
 }
 
@@ -49,11 +50,13 @@ func New(option LogOption) Logs {
 
 	zapLevel := zapLogLevel(activeLevel)
 	var callerEncoder zapcore.CallerEncoder
-	if formatter == LogJsonFormatter {
-		callerEncoder = zapcore.ShortCallerEncoder
-		option.Colorable = false
-	} else {
-		callerEncoder = zapLogFullCallerEncoder
+	if option.EnableCaller {
+		if formatter == LogJsonFormatter {
+			callerEncoder = zapcore.ShortCallerEncoder
+			option.Colorable = false
+		} else {
+			callerEncoder = zapLogFullCallerEncoder
+		}
 	}
 
 	var encodeLevel zapcore.LevelEncoder
@@ -62,7 +65,6 @@ func New(option LogOption) Logs {
 	} else {
 		encodeLevel = zapLogCapitalColorLevelEncoder
 	}
-
 	encodingConfig := zapcore.EncoderConfig{
 		TimeKey:        "_T",
 		LevelKey:       "_L",
@@ -72,7 +74,7 @@ func New(option LogOption) Logs {
 		StacktraceKey:  "_S",
 		LineEnding:     zapcore.DefaultLineEnding,
 		EncodeLevel:    encodeLevel,
-		EncodeTime:     zapcore.RFC3339NanoTimeEncoder,
+		EncodeTime:     TimeEncoder,
 		EncodeDuration: zapcore.StringDurationEncoder,
 		EncodeCaller:   callerEncoder,
 	}
@@ -84,7 +86,7 @@ func New(option LogOption) Logs {
 		EncoderConfig:     encodingConfig,
 		DisableStacktrace: !option.EnableStacktrace,
 		OutputPaths:       []string{"stdout"},
-		ErrorOutputPaths:  []string{"stdout"},
+		ErrorOutputPaths:  []string{"stderr"},
 		InitialFields:     map[string]interface{}{"app": name},
 	}
 
@@ -96,21 +98,29 @@ func New(option LogOption) Logs {
 	return log.Sugar()
 }
 
-func With(log Logs, fields ...Field) (_log Logs, err error) {
-	if fields == nil || len(fields) == 0 {
-		err = fmt.Errorf("logs with fields failed, fields are empty")
-		return
-	}
+func With(log Logs, fields ...Field) (_log Logs) {
 
 	sLog, ok := log.(*zap.SugaredLogger)
 	if !ok {
-		err = fmt.Errorf("logs with fields failed, it is not *zap.SugaredLogger")
+		panic(fmt.Errorf("logs with fields failed, it is not *zap.SugaredLogger"))
+		return
+	}
+
+	if fields == nil || len(fields) == 0 {
+		_log = sLog.Desugar().Sugar()
 		return
 	}
 
 	kvs := make([]zap.Field, 0, 1)
 	for _, field := range fields {
-		kvs = append(kvs, zap.Any(field.Key, field.Value))
+		if field.Key == "error" {
+			codeErr, isCodeErr := field.Value.(codeError)
+			if isCodeErr {
+				kvs = append(kvs, zap.Any(field.Key, codeErr))
+				continue
+			}
+			kvs = append(kvs, zap.Any(field.Key, field.Value))
+		}
 	}
 
 	_log = sLog.Desugar().With(kvs...).Sugar()
