@@ -1,82 +1,128 @@
 package logs
 
 import (
-	"github.com/aacfactory/errors"
-	"go.uber.org/zap/zapcore"
+	"encoding/json"
+	"github.com/rs/zerolog"
 	"strings"
+	"time"
 )
 
-type Field struct {
-	Key   string
-	Value interface{}
-}
-
-func F(key string, value interface{}) Field {
-	return Field{
-		Key:   key,
-		Value: value,
+func withEventField(core *zerolog.Event, key string, value interface{}) (n *zerolog.Event) {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		n = core
+		return
 	}
-}
-
-func Error(err error) Field {
-	return Field{
-		Key:   "error",
-		Value: err,
+	if value == nil {
+		n = core
+		return
 	}
-}
-
-func newCodeErrorMarshalLogObject(err errors.CodeError) codeErrorMarshalLogObject {
-	return codeErrorMarshalLogObject{
-		err: err,
-	}
-}
-
-type codeErrorMarshalLogObject struct {
-	err errors.CodeError
-}
-
-func (o codeErrorMarshalLogObject) MarshalLogObject(enc zapcore.ObjectEncoder) error {
-	err := o.err
-	fn, file, line := err.Stacktrace()
-
-	enc.AddString("id", err.Id())
-	enc.AddString("code", err.Code())
-	enc.AddInt("failureCode", err.FailureCode())
-	if err.Meta() != nil && len(err.Meta()) > 0 {
-		meta := codeErrorMetaMarshalLogObject{
-			meta: err.Meta(),
+	switch value.(type) {
+	case string:
+		n = core.Str(key, value.(string))
+	case int:
+		n = core.Int(key, value.(int))
+	case int8:
+		n = core.Int8(key, value.(int8))
+	case int16:
+		n = core.Int16(key, value.(int16))
+	case int32:
+		n = core.Int32(key, value.(int32))
+	case int64:
+		n = core.Int64(key, value.(int64))
+	case uint:
+		n = core.Uint(key, value.(uint))
+	case uint8:
+		n = core.Uint8(key, value.(uint8))
+	case uint16:
+		n = core.Uint16(key, value.(uint16))
+	case uint32:
+		n = core.Uint32(key, value.(uint32))
+	case uint64:
+		n = core.Uint64(key, value.(uint64))
+	case float32:
+		n = core.Float32(key, value.(float32))
+	case float64:
+		n = core.Float64(key, value.(float64))
+	case bool:
+		n = core.Bool(key, value.(bool))
+	case []byte:
+		n = core.Bytes(key, value.([]byte))
+	case time.Time:
+		o := value.(time.Time)
+		n = core.Str(key, o.Format(time.RFC3339))
+	case time.Duration:
+		o := value.(time.Duration)
+		n = core.Str(key, o.String())
+	case error:
+		o := value.(error)
+		n = core.Err(o)
+	default:
+		data, encodeErr := json.Marshal(value)
+		if encodeErr == nil {
+			n = core.RawJSON(key, data)
 		}
-		_ = enc.AddObject("meta", meta)
 	}
-	enc.AddString("message", err.Message())
-	_ = enc.AddObject("stacktrace", codeErrorStacktraceMarshalLogObject{
-		fn:   fn,
-		file: file,
-		line: line,
-	})
-	return nil
+
+	return
 }
 
-type codeErrorStacktraceMarshalLogObject struct {
-	fn   string
-	file string
-	line int
-}
-
-func (o codeErrorStacktraceMarshalLogObject) MarshalLogObject(enc zapcore.ObjectEncoder) error {
-	enc.AddString("fn", o.fn)
-	enc.AddString("file", o.file)
-	enc.AddInt("line", o.line)
-	return nil
-}
-
-type codeErrorMetaMarshalLogObject struct {
-	meta map[string][]string
-}
-
-func (o codeErrorMetaMarshalLogObject) MarshalLogObject(enc zapcore.ObjectEncoder) error {
-	for key, values := range o.meta {
-		enc.AddString(key, strings.Join(values, ","))
+func withContextField(core zerolog.Context, key string, value interface{}) (n zerolog.Context) {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		n = core
+		return
 	}
-	return nil
+	if value == nil {
+		n = core
+		return
+	}
+	switch value.(type) {
+	case string:
+		n = core.Str(key, value.(string))
+	case int:
+		n = core.Int(key, value.(int))
+	case int8:
+		n = core.Int8(key, value.(int8))
+	case int16:
+		n = core.Int16(key, value.(int16))
+	case int32:
+		n = core.Int32(key, value.(int32))
+	case int64:
+		n = core.Int64(key, value.(int64))
+	case uint:
+		n = core.Uint(key, value.(uint))
+	case uint8:
+		n = core.Uint8(key, value.(uint8))
+	case uint16:
+		n = core.Uint16(key, value.(uint16))
+	case uint32:
+		n = core.Uint32(key, value.(uint32))
+	case uint64:
+		n = core.Uint64(key, value.(uint64))
+	case float32:
+		n = core.Float32(key, value.(float32))
+	case float64:
+		n = core.Float64(key, value.(float64))
+	case bool:
+		n = core.Bool(key, value.(bool))
+	case []byte:
+		n = core.Bytes(key, value.([]byte))
+	case time.Time:
+		o := value.(time.Time)
+		n = core.Str(key, o.Format(time.RFC3339))
+	case time.Duration:
+		o := value.(time.Duration)
+		n = core.Str(key, o.String())
+	case error:
+		o := value.(error)
+		n = core.Err(o)
+	default:
+		data, encodeErr := json.Marshal(value)
+		if encodeErr == nil {
+			n = core.RawJSON(key, data)
+		}
+	}
+
+	return
 }

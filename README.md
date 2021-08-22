@@ -1,33 +1,32 @@
 # 概述
-LOGS 是一个AAC FACTORY LOG的规范。
-# 获取
+
+LOGS 是一个 AAC FACTORY 的 LOG 规范。
+
+## 获取
+
 ```go
 go get github.com/aacfactory/logs
 ```
-# 使用
+
+## 使用
+
 ```go
-log := logs.New(logs.LogOption{
-    Name:        "FOO",
-    Formatter:   logs.LogConsoleFormatter,
-    ActiveLevel: logs.LogDebugLevel,
-    Colorable:   true,
-})
-
-log.Debug("Debug")
-log.Debugf("Debug %s", "debug")
-log.Debugw("Debug", "k", "v", "t", time.Now())
-
-log.Info("Info", "debug")
-log.Infof("Info %s", "debug")
-log.Infow("Info", "k", "v", "t", time.Now())
-
-log.Warn("Warn")
-log.Warnf("Warn %s", "debug")
-log.Warnw("Warn", "k", "v", "t", time.Now())
-
-log.Error("Error", "debug")
-log.Errorf("Error %s", "debug")
-log.Errorw("Error", "k", "v", "t", time.Now())
-
-_ = log.Sync()
+log, err := logs.New(
+logs.Name("name"),
+logs.Writer(os.Stdout),
+logs.WithLevel(logs.DebugLevel),
+logs.WithFormatter(logs.ConsoleFormatter),
+)
+if err != nil {
+    // handle error
+    return
+}
+log.Debug().Caller().Message("foo")
+log.Info().Caller().Message("foo")
+log.Warn().Caller().Message("foo")
+log.Error().Caller().Message("foo")
 ```
+
+## 引用感谢
+
+* [rs/zerolog](https://github.com/rs/zerolog)

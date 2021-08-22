@@ -1,17 +1,38 @@
 package logs
 
-type Logs interface {
-	Debug(args ...interface{})
-	Info(args ...interface{})
-	Warn(args ...interface{})
-	Error(args ...interface{})
-	Debugf(template string, args ...interface{})
-	Infof(template string, args ...interface{})
-	Warnf(template string, args ...interface{})
-	Errorf(template string, args ...interface{})
-	Debugw(msg string, keysAndValues ...interface{})
-	Infow(msg string, keysAndValues ...interface{})
-	Warnw(msg string, keysAndValues ...interface{})
-	Errorw(msg string, keysAndValues ...interface{})
-	Sync() error
+const (
+	ConsoleFormatter = Formatter("console")
+	JsonFormatter    = Formatter("json")
+
+	DebugLevel = 0
+	InfoLevel  = 1
+	WarnLevel  = 2
+	ErrorLevel = 3
+
+	defaultLogName = "AACFACTORY"
+
+	defaultTimeFormatter = "[3:04:05 PM]"
+)
+
+type Level int
+
+type Formatter string
+
+type Logger interface {
+	With(key string, value interface{}) Logger
+	DebugEnabled() (ok bool)
+	Debug() (event Event)
+	InfoEnabled() (ok bool)
+	Info() (event Event)
+	WarnEnabled() (ok bool)
+	Warn() (event Event)
+	ErrorEnabled() (ok bool)
+	Error() (event Event)
+}
+
+type Event interface {
+	Message(message string)
+	Cause(err error) Event
+	Caller() Event
+	With(key string, value interface{}) Event
 }
