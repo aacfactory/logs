@@ -4,10 +4,10 @@ const (
 	ConsoleFormatter = Formatter("console")
 	JsonFormatter    = Formatter("json")
 
-	DebugLevel = 0
-	InfoLevel  = 1
-	WarnLevel  = 2
-	ErrorLevel = 3
+	DebugLevel = Level(0)
+	InfoLevel  = Level(1)
+	WarnLevel  = Level(2)
+	ErrorLevel = Level(3)
 
 	defaultLogName = "AACFACTORY"
 
