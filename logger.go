@@ -125,7 +125,7 @@ func (l *logger) With(key string, value interface{}) (n Logger) {
 		level: l.level,
 		core:  ctx.Logger(),
 	}
-	return l
+	return
 }
 
 func (l *logger) DebugEnabled() (ok bool) {
