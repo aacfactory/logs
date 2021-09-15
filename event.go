@@ -44,6 +44,11 @@ func (e *event) Caller() Event {
 		idx := strings.Index(file, "/src/")
 		if idx > 0 {
 			file = file[idx+5:]
+		} else {
+			idx = strings.Index(file, "/pkg/mod/")
+			if idx > 0 {
+				file = file[idx+9:]
+			}
 		}
 	}
 	e.core = e.core.Str(zerolog.CallerFieldName, fmt.Sprintf("%s:%d", file, line))
