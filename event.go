@@ -36,7 +36,11 @@ func (e *event) Cause(err error) Event {
 }
 
 func (e *event) Caller() Event {
-	_, file, line, ok := runtime.Caller(1)
+	return e.CallerWithSkip(2)
+}
+
+func (e *event) CallerWithSkip(skip int) Event {
+	_, file, line, ok := runtime.Caller(skip)
 	if !ok {
 		return e
 	}
