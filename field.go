@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/valyala/bytebufferpool"
 	"time"
+	"unsafe"
 )
 
 type Field struct {
@@ -30,7 +31,8 @@ func (field Field) MarshalJSON() (p []byte, err error) {
 	_, _ = buf.WriteString(string(field.ValueBytes()))
 	_, _ = buf.Write(dqm)
 	_, _ = buf.Write(rb)
-	p = buf.Bytes()
+	s := buf.String()
+	p = unsafe.Slice(unsafe.StringData(s), len(s))
 	bytebufferpool.Put(buf)
 	return
 }
@@ -79,7 +81,8 @@ func (fields Fields) MarshalJSON() (p []byte, err error) {
 	_, _ = buf.Write(lqb)
 	if len(fields) == 0 {
 		_, _ = buf.Write(rqb)
-		p = buf.Bytes()
+		s := buf.String()
+		p = unsafe.Slice(unsafe.StringData(s), len(s))
 		bytebufferpool.Put(buf)
 		return
 	}
@@ -91,7 +94,8 @@ func (fields Fields) MarshalJSON() (p []byte, err error) {
 		_, _ = buf.Write(b)
 	}
 	_, _ = buf.Write(rqb)
-	p = buf.Bytes()
+	s := buf.String()
+	p = unsafe.Slice(unsafe.StringData(s), len(s))
 	bytebufferpool.Put(buf)
 	return
 }

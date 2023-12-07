@@ -5,6 +5,7 @@ import (
 	"github.com/valyala/bytebufferpool"
 	"strconv"
 	"time"
+	"unsafe"
 )
 
 type Caller struct {
@@ -41,7 +42,8 @@ func (caller Caller) MarshalJSON() (p []byte, err error) {
 	_, _ = buf.Write(colon)
 	_, _ = buf.WriteString(strconv.Itoa(caller.Line))
 	_, _ = buf.Write(rb)
-	p = buf.Bytes()
+	s := buf.String()
+	p = unsafe.Slice(unsafe.StringData(s), len(s))
 	bytebufferpool.Put(buf)
 	return
 }
@@ -132,7 +134,8 @@ func (e Entry) MarshalJSON() (p []byte, err error) {
 		_, _ = buf.Write(causeBytes)
 	}
 	_, _ = buf.Write(rb)
-	p = buf.Bytes()
+	s := buf.String()
+	p = unsafe.Slice(unsafe.StringData(s), len(s))
 	bytebufferpool.Put(buf)
 	return
 }
