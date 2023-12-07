@@ -1,177 +1,266 @@
 package logs
 
 import (
-	"fmt"
-	"github.com/rs/zerolog"
-	"io"
-	"os"
-	"strings"
+	"context"
+	"errors"
+	"time"
 )
 
 type Options struct {
-	name          string
-	writer        io.Writer
-	level         Level
-	formatter     Formatter
-	noColor       bool
-	timeFormatter string
+	level                  Level
+	disableConsole         bool
+	consoleWriterFormatter ConsoleWriterFormatter
+	consoleWriterOutType   ConsoleWriterOutType
+	buffer                 int
+	discardLevel           Level
+	consumes               int
+	writers                []Writer
+	sendTimeout            time.Duration
+	shutdownTimeout        time.Duration
 }
 
 type Option = func(options *Options) (err error)
 
-func Name(name string) Option {
-	name = strings.TrimSpace(name)
+func WithWriter(writers ...Writer) Option {
 	return func(options *Options) (err error) {
-		options.name = name
-		return
-	}
-}
-
-func Writer(w io.Writer) Option {
-	return func(options *Options) (err error) {
-		if w == nil {
-			w = io.Discard
+		for _, writer := range writers {
+			if writer == nil {
+				err = errors.New("one of writer is nil")
+				return
+			}
+			options.writers = append(options.writers, writer)
 		}
-		options.writer = w
 		return
 	}
 }
 
 func WithLevel(value Level) Option {
 	return func(options *Options) (err error) {
-		if value < 0 || value > 3 {
-			value = DebugLevel
+		if value < DebugLevel || value > ErrorLevel {
+			err = errors.New("invalid level")
+			return
 		}
 		options.level = value
 		return
 	}
 }
 
-func Color(enable bool) Option {
+func WithTimeoutDiscardLevel(value Level) Option {
 	return func(options *Options) (err error) {
-		options.noColor = !enable
+		if value < DebugLevel || value > ErrorLevel {
+			err = errors.New("invalid level")
+			return
+		}
+		options.discardLevel = value
 		return
 	}
 }
 
-func TimeFormatter(formatter string) Option {
+func WithConsoleWriterFormatter(formatter ConsoleWriterFormatter) Option {
 	return func(options *Options) (err error) {
-		if formatter == "" {
-			formatter = defaultTimeFormatter
-		}
-		options.timeFormatter = formatter
+		options.consoleWriterFormatter = formatter
 		return
 	}
 }
 
-func WithFormatter(value Formatter) Option {
+func WithConsoleWriterOutType(typ ConsoleWriterOutType) Option {
 	return func(options *Options) (err error) {
-		if value != ConsoleFormatter && value != JsonFormatter {
-			value = JsonFormatter
+		options.consoleWriterOutType = typ
+		return
+	}
+}
+
+func WithBuffer(size int) Option {
+	return func(options *Options) (err error) {
+		if size < 1 {
+			err = errors.New("invalid buffer size")
+			return
 		}
-		options.formatter = value
+		options.buffer = size
+		return
+	}
+}
+
+func WithConsumes(consumes int) Option {
+	return func(options *Options) (err error) {
+		if consumes < 1 {
+			err = errors.New("invalid consumes")
+			return
+		}
+		options.consumes = consumes
+		return
+	}
+}
+
+func WithSendTimeout(timeout time.Duration) Option {
+	return func(options *Options) (err error) {
+		if timeout < 1 {
+			err = errors.New("invalid timeout")
+			return
+		}
+		options.sendTimeout = timeout
+		return
+	}
+}
+
+func WithShutdownTimeout(timeout time.Duration) Option {
+	return func(options *Options) (err error) {
+		if timeout < 1 {
+			err = errors.New("invalid timeout")
+			return
+		}
+		options.shutdownTimeout = timeout
+		return
+	}
+}
+
+func DisableConsoleWriter() Option {
+	return func(options *Options) (err error) {
+		options.disableConsole = true
 		return
 	}
 }
 
 func New(options ...Option) (log Logger, err error) {
-
+	// options
 	opt := &Options{
-		name:          defaultLogName,
-		writer:        os.Stdout,
-		level:         DebugLevel,
-		formatter:     ConsoleFormatter,
-		noColor:       false,
-		timeFormatter: defaultTimeFormatter,
+		level:                  InfoLevel,
+		disableConsole:         false,
+		consoleWriterFormatter: TextFormatter,
+		consoleWriterOutType:   StdOut,
+		buffer:                 0,
+		discardLevel:           DebugLevel,
+		consumes:               1,
+		writers:                nil,
+		sendTimeout:            0,
+		shutdownTimeout:        0,
 	}
-
 	if options != nil {
+		errs := 0
+		optErrs := errors.New("new logger failed")
 		for _, option := range options {
 			optErr := option(opt)
 			if optErr != nil {
-				err = fmt.Errorf("create log failed, %v", optErr)
-				return
+				optErrs = errors.Join(optErrs, optErr)
+				errs++
 			}
 		}
+		if errs > 0 {
+			err = optErrs
+			return
+		}
 	}
-
-	core := zerolog.New(opt.writer)
-
-	if opt.formatter == ConsoleFormatter {
-		core = core.Output(buildConsoleWriter(opt.writer, !opt.noColor, opt.timeFormatter))
+	if !opt.disableConsole {
+		// set console writer at end
+		console := NewConsoleWriter(opt.consoleWriterFormatter, opt.consoleWriterOutType)
+		opt.writers = append(opt.writers, console)
 	}
-
-	core = core.Level(zerolog.Level(opt.level))
-
-	core = core.With().Timestamp().Str("app", opt.name).Logger()
-
+	if len(opt.writers) == 0 {
+		err = errors.New("new logger failed, writers is required")
+		return
+	}
+	// sink
+	sink := newSink(opt.level, opt.discardLevel, opt.consumes, opt.buffer, opt.sendTimeout, opt.shutdownTimeout, opt.writers)
+	// events
+	events := newEvents(sink)
+	// logger
 	log = &logger{
-		level: opt.level,
-		core:  core,
+		level:  opt.level,
+		events: events,
+		fields: nil,
 	}
 
 	return
+}
+
+type Logger interface {
+	With(key string, value any) Logger
+	DebugEnabled() (ok bool)
+	Debug() (event Event)
+	InfoEnabled() (ok bool)
+	Info() (event Event)
+	WarnEnabled() (ok bool)
+	Warn() (event Event)
+	ErrorEnabled() (ok bool)
+	Error() (event Event)
+	Shutdown(ctx context.Context) (err error)
 }
 
 type logger struct {
-	level Level
-	core  zerolog.Logger
+	level  Level
+	events *Events
+	fields Fields
 }
 
-func (l *logger) With(key string, value interface{}) (n Logger) {
-	ctx := l.core.With()
-	ctx = withContextField(ctx, key, value)
+func (log *logger) With(key string, value any) (n Logger) {
 	n = &logger{
-		level: l.level,
-		core:  ctx.Logger(),
+		level:  log.level,
+		events: log.events,
+		fields: log.fields.Add(key, value),
 	}
 	return
 }
 
-func (l *logger) DebugEnabled() (ok bool) {
-	ok = l.level <= DebugLevel
+func (log *logger) DebugEnabled() (ok bool) {
+	ok = log.level <= DebugLevel
 	return
 }
 
-func (l *logger) Debug() (e Event) {
-	e = &event{
-		core: l.core.Debug(),
+func (log *logger) Debug() (e Event) {
+	if log.DebugEnabled() {
+		e = log.events.Get(DebugLevel, log.fields)
+		return
 	}
+	e = empty
 	return
 }
 
-func (l *logger) InfoEnabled() (ok bool) {
-	ok = l.level <= InfoLevel
+func (log *logger) InfoEnabled() (ok bool) {
+	ok = log.level <= InfoLevel
 	return
 }
 
-func (l *logger) Info() (e Event) {
-	e = &event{
-		core: l.core.Info(),
+func (log *logger) Info() (e Event) {
+	if log.InfoEnabled() {
+		e = log.events.Get(InfoLevel, log.fields)
+		return
 	}
+	e = empty
 	return
 }
 
-func (l *logger) WarnEnabled() (ok bool) {
-	ok = l.level <= WarnLevel
+func (log *logger) WarnEnabled() (ok bool) {
+	ok = log.level <= WarnLevel
 	return
 }
 
-func (l *logger) Warn() (e Event) {
-	e = &event{
-		core: l.core.Warn(),
+func (log *logger) Warn() (e Event) {
+	if log.WarnEnabled() {
+		e = log.events.Get(WarnLevel, log.fields)
+		return
 	}
+	e = empty
 	return
 }
 
-func (l *logger) ErrorEnabled() (ok bool) {
-	ok = l.level <= ErrorLevel
+func (log *logger) ErrorEnabled() (ok bool) {
+	ok = log.level <= ErrorLevel
 	return
 }
 
-func (l *logger) Error() (e Event) {
-	e = &event{
-		core: l.core.Error(),
+func (log *logger) Error() (e Event) {
+	if log.ErrorEnabled() {
+		e = log.events.Get(ErrorLevel, log.fields)
+		return
 	}
+	e = empty
+	return
+}
+
+func (log *logger) Shutdown(ctx context.Context) (err error) {
+	if len(log.fields) > 0 {
+		return
+	}
+	err = log.events.Shutdown(ctx)
 	return
 }

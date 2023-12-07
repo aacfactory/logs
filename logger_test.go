@@ -1,41 +1,71 @@
 package logs_test
 
 import (
+	"context"
+	"errors"
 	"github.com/aacfactory/logs"
-	"os"
 	"testing"
 	"time"
 )
 
 func TestNew(t *testing.T) {
-	log, err := logs.New(
-		logs.Name("name"),
-		logs.Writer(os.Stdout),
+	log, logErr := logs.New(
 		logs.WithLevel(logs.DebugLevel),
-		logs.WithFormatter(logs.ConsoleFormatter),
 	)
-	if err != nil {
-		t.Error(err)
+	if logErr != nil {
+		t.Error(logErr)
 		return
 	}
-	log.Debug().Caller().Message("foo")
-	log.Info().Caller().Message("foo")
-	log.Warn().Caller().Message("foo")
-	log.Error().Caller().Message("foo")
+
+	log.Debug().Caller().With("f1", "f1").With("f2", 2).Message("debug")
+	log.Info().Caller().With("time", time.Now()).Message("info")
+	log.Warn().Caller().Message("warn")
+	log.Error().Caller().Cause(errors.New("some error")).Message("error")
+
+	logErr = log.Shutdown(context.Background())
+	if logErr != nil {
+		t.Error(logErr)
+		return
+	}
 }
 
-func TestMapToLogger(t *testing.T) {
-	log, err := logs.New(
-		logs.Name("name"),
-		logs.Writer(os.Stdout),
+func TestLogger_Json(t *testing.T) {
+	log, logErr := logs.New(
 		logs.WithLevel(logs.DebugLevel),
-		logs.WithFormatter(logs.ConsoleFormatter),
+		logs.WithConsoleWriterFormatter(logs.JsonFormatter),
 	)
-	if err != nil {
-		t.Error(err)
+	if logErr != nil {
+		t.Error(logErr)
 		return
 	}
-	log.Debug().Caller().Message(time.Now().String())
-	sLog := logs.MapToLogger(log, logs.DebugLevel, true)
-	sLog.Println(time.Now())
+
+	log.Debug().Caller().With("f1", "f1").With("f2", 2).Message("debug")
+	log.Info().With("time", time.Now()).Message("info")
+	log.Warn().Caller().Message("warn")
+	log.Error().Caller().Cause(errors.New("some error")).Message("error")
+
+	logErr = log.Shutdown(context.Background())
+	if logErr != nil {
+		t.Error(logErr)
+		return
+	}
+
+}
+
+func BenchmarkLogger_Info(b *testing.B) {
+	log, logErr := logs.New()
+	if logErr != nil {
+		b.Error(logErr)
+		return
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		log.Info().Message("info")
+	}
+	logErr = log.Shutdown(context.Background())
+	if logErr != nil {
+		b.Error(logErr)
+		return
+	}
 }

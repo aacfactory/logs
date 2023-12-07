@@ -1,37 +1,82 @@
 package logs
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
-	"github.com/rs/zerolog"
 	"runtime"
 	"strings"
+	"sync"
+	"time"
 )
 
+type Event interface {
+	Message(message string)
+	MessageF(format string, a ...any)
+	Cause(err error) Event
+	Caller() Event
+	CallerWithSkip(skip int) Event
+	With(key string, value any) Event
+}
+
+var (
+	empty Event = &emptyEvent{}
+)
+
+type emptyEvent struct {
+}
+
+func (e *emptyEvent) Message(message string) {
+}
+
+func (e *emptyEvent) MessageF(format string, a ...any) {
+}
+
+func (e *emptyEvent) Cause(err error) Event {
+	return e
+}
+
+func (e *emptyEvent) Caller() Event {
+	return e
+}
+
+func (e *emptyEvent) CallerWithSkip(skip int) Event {
+	return e
+}
+
+func (e *emptyEvent) With(key string, value any) Event {
+	return e
+}
+
 type event struct {
-	core *zerolog.Event
+	sink  *Sink
+	reset func(event *event)
+	entry Entry
 }
 
 func (e *event) Message(message string) {
-	e.core.Msg(message)
+	e.entry.Message = message
+	e.sink.Emit(e.entry)
+	e.reset(e)
+}
+
+func (e *event) MessageF(format string, a ...any) {
+	e.entry.Message = fmt.Sprintf(format, a...)
+	e.sink.Emit(e.entry)
+	e.reset(e)
 }
 
 func (e *event) Cause(err error) Event {
 	if err == nil {
 		return e
 	}
-
-	if isCodeError(err) {
-		data, encodeErr := json.Marshal(err)
-		if encodeErr != nil {
-			e.core = e.core.Err(err)
-		} else {
-			e.core = e.core.RawJSON(zerolog.ErrorFieldName, data)
-		}
-	} else {
-		e.core = e.core.Err(err)
+	cause, ok := err.(Error)
+	if ok {
+		e.entry.Cause = cause
+		return e
 	}
-
+	e.entry.Cause = jsonError{
+		cause: err,
+	}
 	return e
 }
 
@@ -40,7 +85,7 @@ func (e *event) Caller() Event {
 }
 
 func (e *event) CallerWithSkip(skip int) Event {
-	_, file, line, ok := runtime.Caller(skip)
+	pc, file, line, ok := runtime.Caller(skip)
 	if !ok {
 		return e
 	}
@@ -55,24 +100,64 @@ func (e *event) CallerWithSkip(skip int) Event {
 			}
 		}
 	}
-	e.core = e.core.Str(zerolog.CallerFieldName, fmt.Sprintf("%s:%d", file, line))
+	fn := runtime.FuncForPC(pc)
+	e.entry.Caller.File = file
+	e.entry.Caller.Line = line
+	e.entry.Caller.Fn = fn.Name()
 	return e
 }
 
-func (e *event) With(key string, value interface{}) Event {
-	e.core = withEventField(e.core, key, value)
+func (e *event) With(key string, value any) Event {
+	e.entry.Fields = e.entry.Fields.Add(key, value)
 	return e
 }
 
-func isCodeError(err error) (ok bool) {
-	_, ok = err.(codeError)
+func newEvents(sink *Sink) *Events {
+	return &Events{
+		pool: sync.Pool{},
+		sink: sink,
+	}
+}
+
+type Events struct {
+	pool sync.Pool
+	sink *Sink
+}
+
+func (events *Events) Get(level Level, fields Fields) (v Event) {
+	c := events.pool.Get()
+	if c == nil {
+		v = &event{
+			sink:  events.sink,
+			reset: events.release,
+			entry: Entry{
+				Level:  level,
+				Occur:  time.Now(),
+				Fields: fields,
+			},
+		}
+		return
+	}
+	vv := c.(*event)
+	vv.entry.Level = level
+	vv.entry.Occur = time.Now()
+	vv.entry.Fields = fields
+	v = vv
 	return
 }
 
-type codeError interface {
-	Id() string
-	Code() int
-	Name() string
-	Message() string
-	Stacktrace() (fn string, file string, line int)
+func (events *Events) Shutdown(ctx context.Context) (err error) {
+	err = events.sink.Shutdown(ctx)
+	return
+}
+
+func (events *Events) release(v *event) {
+	v.entry.Message = ""
+	v.entry.Fields = nil
+	v.entry.Cause = nil
+	v.entry.Occur = time.Time{}
+	v.entry.Caller.Fn = ""
+	v.entry.Caller.File = ""
+	v.entry.Caller.Line = 0
+	events.pool.Put(v)
 }

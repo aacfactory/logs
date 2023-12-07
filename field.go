@@ -1,128 +1,97 @@
 package logs
 
 import (
-	"encoding/json"
-	"github.com/rs/zerolog"
-	"strings"
+	"fmt"
+	"github.com/valyala/bytebufferpool"
 	"time"
 )
 
-func withEventField(core *zerolog.Event, key string, value interface{}) (n *zerolog.Event) {
-	key = strings.TrimSpace(key)
-	if key == "" {
-		n = core
-		return
-	}
-	if value == nil {
-		n = core
-		return
-	}
-	switch value.(type) {
-	case string:
-		n = core.Str(key, value.(string))
-	case int:
-		n = core.Int(key, value.(int))
-	case int8:
-		n = core.Int8(key, value.(int8))
-	case int16:
-		n = core.Int16(key, value.(int16))
-	case int32:
-		n = core.Int32(key, value.(int32))
-	case int64:
-		n = core.Int64(key, value.(int64))
-	case uint:
-		n = core.Uint(key, value.(uint))
-	case uint8:
-		n = core.Uint8(key, value.(uint8))
-	case uint16:
-		n = core.Uint16(key, value.(uint16))
-	case uint32:
-		n = core.Uint32(key, value.(uint32))
-	case uint64:
-		n = core.Uint64(key, value.(uint64))
-	case float32:
-		n = core.Float32(key, value.(float32))
-	case float64:
-		n = core.Float64(key, value.(float64))
-	case bool:
-		n = core.Bool(key, value.(bool))
-	case []byte:
-		n = core.Bytes(key, value.([]byte))
-	case time.Time:
-		o := value.(time.Time)
-		n = core.Str(key, o.Format(time.RFC3339))
-	case time.Duration:
-		o := value.(time.Duration)
-		n = core.Str(key, o.String())
-	case error:
-		o := value.(error)
-		n = core.Err(o)
-	default:
-		data, encodeErr := json.Marshal(value)
-		if encodeErr == nil {
-			n = core.RawJSON(key, data)
-		}
-	}
+type Field struct {
+	Key   string
+	Value any
+}
 
+func (field Field) MarshalJSON() (p []byte, err error) {
+	buf := bytebufferpool.Get()
+	_, _ = buf.Write(lb)
+	_, _ = buf.Write(dqm)
+	_, _ = buf.Write(keyIdent)
+	_, _ = buf.Write(dqm)
+	_, _ = buf.Write(colon)
+	_, _ = buf.Write(dqm)
+	_, _ = buf.WriteString(field.Key)
+	_, _ = buf.Write(dqm)
+	_, _ = buf.Write(comma)
+	_, _ = buf.Write(dqm)
+	_, _ = buf.Write(valueIdent)
+	_, _ = buf.Write(dqm)
+	_, _ = buf.Write(colon)
+	_, _ = buf.Write(dqm)
+	_, _ = buf.WriteString(string(field.ValueBytes()))
+	_, _ = buf.Write(dqm)
+	_, _ = buf.Write(rb)
+	p = buf.Bytes()
+	bytebufferpool.Put(buf)
 	return
 }
 
-func withContextField(core zerolog.Context, key string, value interface{}) (n zerolog.Context) {
-	key = strings.TrimSpace(key)
-	if key == "" {
-		n = core
-		return
-	}
-	if value == nil {
-		n = core
-		return
-	}
-	switch value.(type) {
+func (field Field) ValueBytes() (p []byte) {
+	vp := ""
+	switch value := field.Value.(type) {
+	case nil:
+		vp = "<nil>"
+		break
 	case string:
-		n = core.Str(key, value.(string))
-	case int:
-		n = core.Int(key, value.(int))
-	case int8:
-		n = core.Int8(key, value.(int8))
-	case int16:
-		n = core.Int16(key, value.(int16))
-	case int32:
-		n = core.Int32(key, value.(int32))
-	case int64:
-		n = core.Int64(key, value.(int64))
-	case uint:
-		n = core.Uint(key, value.(uint))
-	case uint8:
-		n = core.Uint8(key, value.(uint8))
-	case uint16:
-		n = core.Uint16(key, value.(uint16))
-	case uint32:
-		n = core.Uint32(key, value.(uint32))
-	case uint64:
-		n = core.Uint64(key, value.(uint64))
-	case float32:
-		n = core.Float32(key, value.(float32))
-	case float64:
-		n = core.Float64(key, value.(float64))
-	case bool:
-		n = core.Bool(key, value.(bool))
+		vp = value
+		break
 	case []byte:
-		n = core.Bytes(key, value.([]byte))
+		vp = string(value)
+		break
 	case time.Time:
-		o := value.(time.Time)
-		n = core.Str(key, o.Format(time.RFC3339))
-	case time.Duration:
-		o := value.(time.Duration)
-		n = core.Str(key, o.String())
-	case error:
-		o := value.(error)
-		n = core.Err(o)
+		vp = value.Format(time.RFC3339)
+		break
 	default:
-		data, encodeErr := json.Marshal(value)
-		if encodeErr == nil {
-			n = core.RawJSON(key, data)
+		vp = fmt.Sprintf("%v", value)
+		break
+	}
+	p = []byte(vp)
+	return
+}
+
+type Fields []Field
+
+func (fields Fields) Add(key string, value any) Fields {
+	for i, field := range fields {
+		if field.Key == key {
+			field.Value = value
+			fields[i] = field
+			return fields
 		}
 	}
+	return append(fields, Field{
+		Key:   key,
+		Value: value,
+	})
+}
 
+func (fields Fields) MarshalJSON() (p []byte, err error) {
+	buf := bytebufferpool.Get()
+	_, _ = buf.Write(lqb)
+	if len(fields) == 0 {
+		_, _ = buf.Write(rqb)
+		p = buf.Bytes()
+		bytebufferpool.Put(buf)
+		return
+	}
+	for i, field := range fields {
+		if i > 0 {
+			_, _ = buf.Write(comma)
+		}
+		b, _ := field.MarshalJSON()
+		_, _ = buf.Write(b)
+	}
+	_, _ = buf.Write(rqb)
+	p = buf.Bytes()
+	bytebufferpool.Put(buf)
 	return
 }

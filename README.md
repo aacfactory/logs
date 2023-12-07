@@ -11,22 +11,17 @@ go get github.com/aacfactory/logs
 ## 使用
 
 ```go
-log, err := logs.New(
-logs.Name("name"),
-logs.Writer(os.Stdout),
-logs.WithLevel(logs.DebugLevel),
-logs.WithFormatter(logs.ConsoleFormatter),
+log, logErr := logs.New(
+    logs.WithLevel(logs.DebugLevel),
 )
-if err != nil {
-    // handle error
-    return
-}
-log.Debug().Caller().Message("foo")
-log.Info().Caller().Message("foo")
-log.Warn().Caller().Message("foo")
-log.Error().Caller().Message("foo")
+// handle logErr
+// print
+log.Debug().Caller().With("f1", "f1").With("f2", 2).Message("debug")
+log.Info().With("time", time.Now()).Message("info")
+log.Warn().Caller().Message("warn")
+log.Error().Caller().Cause(errors.New("some error")).Message("error")
+// shutdown
+shutdownErr := log.Shutdown(context.Background())
 ```
 
-## 引用感谢
 
-* [rs/zerolog](https://github.com/rs/zerolog)
