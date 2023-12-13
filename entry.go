@@ -61,6 +61,10 @@ func (err jsonError) MarshalJSON() ([]byte, error) {
 	return append(append([]byte(`{"message": "`), err.cause.Error()...), []byte(`"}`)...), nil
 }
 
+func (err jsonError) String() string {
+	return err.cause.Error()
+}
+
 func (err jsonError) Error() string {
 	return err.cause.Error()
 }

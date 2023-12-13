@@ -57,6 +57,7 @@ func NewConsoleWriter(formatter ConsoleWriterFormatter, out ConsoleWriterOutType
 			callerFnColor:   color.New(color.FgHiBlack),
 			fieldKeyColor:   color.New(color.FgHiCyan),
 			fieldValueColor: color.New(color.FgHiBlack),
+			causeColor:      color.New(color.BgHiRed),
 		}
 		outWriter = colorable.NewColorable(outWriter.(*os.File))
 		errWriter = colorable.NewColorable(errWriter.(*os.File))
@@ -112,6 +113,7 @@ type TextEntryEncoder struct {
 	callerFnColor   *color.Color
 	fieldKeyColor   *color.Color
 	fieldValueColor *color.Color
+	causeColor      *color.Color
 }
 
 func (encoder *TextEntryEncoder) Encode(entry Entry) (p []byte) {
@@ -161,6 +163,16 @@ func (encoder *TextEntryEncoder) Encode(entry Entry) (p []byte) {
 	}
 	_, _ = buf.Write(newline)
 	_, _ = buf.WriteString(entry.Message)
+	if entry.Cause != nil {
+		_, _ = buf.Write(newline)
+		if encoder.colorable {
+			_, _ = encoder.causeColor.Fprintf(buf, ">>>>>>>>>>>>> ERROR <<<<<<<<<<<<<")
+		} else {
+			_, _ = buf.WriteString(">>>>>>>>>>>>> ERROR <<<<<<<<<<<<<")
+		}
+		_, _ = buf.Write(newline)
+		_, _ = buf.WriteString(fmt.Sprintf("%+v", entry.Cause))
+	}
 	if len(entry.Fields) > 0 {
 		_, _ = buf.Write(newline)
 		for i, field := range entry.Fields {

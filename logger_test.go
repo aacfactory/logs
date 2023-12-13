@@ -11,6 +11,7 @@ import (
 func TestNew(t *testing.T) {
 	log, logErr := logs.New(
 		logs.WithLevel(logs.DebugLevel),
+		logs.WithConsoleWriterFormatter(logs.ColorTextFormatter),
 	)
 	if logErr != nil {
 		t.Error(logErr)
@@ -20,7 +21,7 @@ func TestNew(t *testing.T) {
 	log.Debug().Caller().With("f1", "f1").With("f2", 2).Message("debug")
 	log.Info().Caller().With("time", time.Now()).Message("info")
 	log.Warn().Caller().Message("warn")
-	log.Error().Caller().Cause(errors.New("some error")).Message("error")
+	log.Error().Caller().With("time", time.Now()).Cause(errors.New("some error")).Message("error")
 
 	logErr = log.Shutdown(context.Background())
 	if logErr != nil {
