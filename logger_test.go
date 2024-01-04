@@ -3,7 +3,9 @@ package logs_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/aacfactory/logs"
+	"os"
 	"testing"
 	"time"
 )
@@ -54,7 +56,10 @@ func TestLogger_Json(t *testing.T) {
 }
 
 func BenchmarkLogger_Info(b *testing.B) {
-	log, logErr := logs.New()
+	devNull, _ := os.Open(os.DevNull)
+	log, logErr := logs.New(logs.DisableConsoleWriter(), logs.WithWriter(&DiscardWriter{
+		dn: devNull,
+	}))
 	if logErr != nil {
 		b.Error(logErr)
 		return
@@ -69,4 +74,16 @@ func BenchmarkLogger_Info(b *testing.B) {
 		b.Error(logErr)
 		return
 	}
+}
+
+type DiscardWriter struct {
+	dn *os.File
+}
+
+func (w *DiscardWriter) Write(entry logs.Entry) {
+	w.dn.WriteString(fmt.Sprintf("%+v", entry))
+}
+
+func (w *DiscardWriter) Close() (err error) {
+	return
 }

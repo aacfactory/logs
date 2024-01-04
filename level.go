@@ -3,6 +3,7 @@ package logs
 import (
 	"github.com/fatih/color"
 	"io"
+	"unsafe"
 )
 
 const (
@@ -49,7 +50,7 @@ func (level Level) ColorableLevelWriterTo() (w io.WriterTo) {
 	var c *color.Color
 	switch level {
 	case DebugLevel:
-		c = color.New(color.FgHiBlack, color.Bold)
+		c = color.New(color.FgHiGreen, color.Bold)
 		break
 	case InfoLevel:
 		c = color.New(color.FgHiCyan, color.Bold)
@@ -61,6 +62,7 @@ func (level Level) ColorableLevelWriterTo() (w io.WriterTo) {
 		c = color.New(color.FgHiRed, color.Bold)
 		break
 	}
+	c.EnableColor()
 	w = &ColorableLevelWriterTo{
 		color: c,
 		level: level,
@@ -74,6 +76,8 @@ type ColorableLevelWriterTo struct {
 }
 
 func (lc ColorableLevelWriterTo) WriteTo(writer io.Writer) (int64, error) {
-	n, err := lc.color.Fprint(writer, lc.level.String())
+	s := lc.color.Sprint(lc.level.String())
+	p := unsafe.Slice(unsafe.StringData(s), len(s))
+	n, err := writer.Write(p)
 	return int64(n), err
 }

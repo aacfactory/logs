@@ -46,18 +46,30 @@ func NewConsoleWriter(formatter ConsoleWriterFormatter, out ConsoleWriterOutType
 	var encoder EntryEncoder
 	switch formatter {
 	case ColorTextFormatter:
+		timeColor := color.New(color.FgHiBlack, color.Bold)
+		timeColor.EnableColor()
+		callerColor := color.New(color.FgHiBlue, color.Underline)
+		callerColor.EnableColor()
+		callerFnColor := color.New(color.FgHiBlack)
+		callerFnColor.EnableColor()
+		fieldKeyColor := color.New(color.FgHiCyan, color.Bold)
+		fieldKeyColor.EnableColor()
+		fieldValueColor := color.New(color.FgHiBlack)
+		fieldValueColor.EnableColor()
+		causeColor := color.New(color.BgHiRed, color.Bold)
+		causeColor.EnableColor()
 		encoder = &TextEntryEncoder{
 			colorable:       true,
 			debugWriterTo:   DebugLevel.ColorableLevelWriterTo(),
 			infoWriterTo:    InfoLevel.ColorableLevelWriterTo(),
 			warnWriterTo:    WarnLevel.ColorableLevelWriterTo(),
 			errorWriterTo:   ErrorLevel.ColorableLevelWriterTo(),
-			timeColor:       color.New(color.FgHiBlack),
-			callerColor:     color.New(color.FgHiBlue, color.Underline),
-			callerFnColor:   color.New(color.FgHiBlack),
-			fieldKeyColor:   color.New(color.FgHiCyan),
-			fieldValueColor: color.New(color.FgHiBlack),
-			causeColor:      color.New(color.BgHiRed),
+			timeColor:       timeColor,
+			callerColor:     callerColor,
+			callerFnColor:   callerFnColor,
+			fieldKeyColor:   fieldKeyColor,
+			fieldValueColor: fieldValueColor,
+			causeColor:      causeColor,
 		}
 		outWriter = colorable.NewColorable(outWriter.(*os.File))
 		errWriter = colorable.NewColorable(errWriter.(*os.File))
@@ -144,7 +156,7 @@ func (encoder *TextEntryEncoder) Encode(entry Entry) (p []byte) {
 	_, _ = buf.Write(space)
 	_, _ = buf.Write(lqb)
 	if encoder.colorable {
-		_, _ = encoder.timeColor.Fprintf(buf, "%s", entry.Occur.Format(time.DateTime))
+		_, _ = buf.WriteString(encoder.timeColor.Sprintf("%s", entry.Occur.Format("15:04:05.000")))
 	} else {
 		_, _ = buf.WriteString(entry.Occur.Format(time.DateTime))
 	}
@@ -152,11 +164,11 @@ func (encoder *TextEntryEncoder) Encode(entry Entry) (p []byte) {
 	_, _ = buf.Write(space)
 	if entry.Caller.File != "" {
 		if encoder.colorable {
-			_, _ = encoder.callerColor.Fprintf(buf, "%s:%d", entry.Caller.File, entry.Caller.Line)
+			_, _ = buf.WriteString(encoder.timeColor.Sprintf("%s:%d", entry.Caller.File, entry.Caller.Line))
 			_, _ = buf.Write(space)
 			_, _ = buf.Write(lab)
 			_, _ = buf.Write(space)
-			_, _ = encoder.callerFnColor.Fprintf(buf, "%s", entry.Caller.Fn)
+			_, _ = buf.WriteString(encoder.callerFnColor.Sprintf("%s", entry.Caller.Fn))
 		} else {
 			_, _ = buf.WriteString(fmt.Sprintf("%s:%d > %s", entry.Caller.File, entry.Caller.Line, entry.Caller.Fn))
 		}
@@ -166,7 +178,7 @@ func (encoder *TextEntryEncoder) Encode(entry Entry) (p []byte) {
 	if entry.Cause != nil {
 		_, _ = buf.Write(newline)
 		if encoder.colorable {
-			_, _ = encoder.causeColor.Fprintf(buf, ">>>>>>>>>>>>> ERROR <<<<<<<<<<<<<")
+			_, _ = buf.WriteString(encoder.causeColor.Sprintf("%s", ">>>>>>>>>>>>> ERROR <<<<<<<<<<<<<"))
 		} else {
 			_, _ = buf.WriteString(">>>>>>>>>>>>> ERROR <<<<<<<<<<<<<")
 		}
@@ -180,9 +192,9 @@ func (encoder *TextEntryEncoder) Encode(entry Entry) (p []byte) {
 				_, _ = buf.Write(space)
 			}
 			if encoder.colorable {
-				_, _ = encoder.fieldKeyColor.Fprintf(buf, "%s", field.Key)
+				_, _ = buf.WriteString(encoder.fieldKeyColor.Sprintf("%s", field.Key))
 				_, _ = buf.Write(equal)
-				_, _ = encoder.fieldValueColor.Fprintf(buf, "%s", string(field.ValueBytes()))
+				_, _ = buf.WriteString(encoder.fieldValueColor.Sprintf("%s", string(field.ValueBytes())))
 			} else {
 				_, _ = buf.WriteString(fmt.Sprintf("%s=%s", field.Key, string(field.ValueBytes())))
 			}
