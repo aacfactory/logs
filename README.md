@@ -25,3 +25,7 @@ shutdownErr := log.Shutdown(context.Background())
 ```
 
 
+## 压测
+```shell
+BenchmarkLogger_Info-20 1602939   744.5 ns/op   243 B/op  5 allocs/op
+```

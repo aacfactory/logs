@@ -3,9 +3,9 @@ package logs_test
 import (
 	"context"
 	"errors"
-	"fmt"
 	"github.com/aacfactory/logs"
 	"os"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -55,11 +55,36 @@ func TestLogger_Json(t *testing.T) {
 
 }
 
+func TestLogger_Shutdown(t *testing.T) {
+	log, logErr := logs.New(
+		logs.WithShutdownTimeout(3*time.Second),
+		logs.DisableConsoleWriter(),
+		logs.WithWriter(discardWriter()),
+	)
+	if logErr != nil {
+		t.Error(logErr)
+		return
+	}
+	go func(log logs.Logger) {
+		for {
+			log.Info().Message("info")
+		}
+	}(log)
+	time.Sleep(3 * time.Second)
+	err := log.Shutdown(context.Background())
+	if err != nil {
+		t.Error(err)
+	}
+}
+
 func BenchmarkLogger_Info(b *testing.B) {
-	devNull, _ := os.Open(os.DevNull)
-	log, logErr := logs.New(logs.DisableConsoleWriter(), logs.WithWriter(&DiscardWriter{
-		dn: devNull,
-	}))
+	log, logErr := logs.New(
+		logs.WithTimeoutDiscardLevel(logs.InfoLevel),
+		logs.DisableConsoleWriter(),
+		logs.WithWriter(discardWriter()),
+		logs.WithConsumes(runtime.NumCPU()),
+		logs.WithShutdownTimeout(3*time.Second),
+	)
 	if logErr != nil {
 		b.Error(logErr)
 		return
@@ -76,12 +101,20 @@ func BenchmarkLogger_Info(b *testing.B) {
 	}
 }
 
+func discardWriter() *DiscardWriter {
+	dev, _ := os.Open(os.DevNull)
+	return &DiscardWriter{
+		dev: dev,
+	}
+}
+
 type DiscardWriter struct {
-	dn *os.File
+	dev *os.File
 }
 
 func (w *DiscardWriter) Write(entry logs.Entry) {
-	w.dn.WriteString(fmt.Sprintf("%+v", entry))
+	p, _ := entry.MarshalJSON()
+	_, _ = w.dev.Write(p)
 }
 
 func (w *DiscardWriter) Close() (err error) {

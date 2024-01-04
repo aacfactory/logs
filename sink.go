@@ -3,6 +3,7 @@ package logs
 import (
 	"context"
 	"errors"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -20,16 +21,16 @@ func newSink(minLevel Level, discardLevel Level, consumes int, buffer int, sendT
 		discardLevel = DebugLevel
 	}
 	if consumes < 1 {
-		consumes = 1
+		consumes = runtime.NumCPU()
 	}
 	if buffer < 1 {
-		buffer = 4096
+		buffer = 40960
 	}
 	if sendTimeout < 1 {
 		sendTimeout = time.Duration(10) * time.Microsecond
 	}
 	if shutdownTimeout < 1 {
-		shutdownTimeout = time.Duration(1) * time.Hour
+		shutdownTimeout = time.Duration(10) * time.Second
 	}
 	if len(writers) == 0 {
 		writers = append(writers, NewConsoleWriter(TextFormatter, StdOut))
@@ -126,18 +127,19 @@ func (sink *Sink) Listen() {
 }
 
 func (sink *Sink) Shutdown(ctx context.Context) (err error) {
+	if !sink.running.Load() {
+		return
+	}
+	tc, cancel := context.WithTimeout(ctx, sink.shutdownTimeout)
+	defer cancel()
 	sink.running.Store(false)
 	select {
-	case <-ctx.Done():
+	case <-tc.Done():
 		err = ErrCloseTimeout
-		break
+		return
 	case <-sink.wait():
-		break
-	case <-time.After(sink.shutdownTimeout):
-		err = ErrCloseTimeout
-		break
+		return
 	}
-	return
 }
 
 func (sink *Sink) wait() (ch <-chan struct{}) {
